@@ -1,0 +1,7 @@
+.idea
+.goroot/
+.gopath/
+.env
+/bin/
+*.exe
+ailanglearn

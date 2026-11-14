@@ -1,0 +1,7 @@
+Target language: {{Language}}.
+Recently used topics to avoid: {{RecentTopics}}.
+
+Propose ONE brand-new casual discussion topic and write a warm opening greeting in {{Language}} (2-3 sentences) that introduces the topic and asks one first question.
+
+Reply with ONLY a JSON object in exactly this shape (no markdown fences, no extra text):
+{"topic":"<short topic phrase in English>","greeting":"<the greeting, entirely in {{Language}}>"}
