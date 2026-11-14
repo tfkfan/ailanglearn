@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
-// App bundles the HTTP dependencies.
 type App struct {
 	cfg   *Config
 	tts   *TTS
@@ -17,10 +19,69 @@ type App struct {
 	webFS fs.FS
 }
 
+func Run(webAssets, promptAssets fs.FS) {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("note: could not load .env: %v", err)
+	}
+
+	cfg := loadConfig()
+
+	promptsFS, err := resolvePrompts(cfg.PromptsDir, promptAssets)
+	if err != nil {
+		log.Fatalf("prompts: %v", err)
+	}
+
+	llm := newLLM(cfg)
+	tts := newTTS(cfg)
+	agent := &Agent{llm: llm, store: newSessionStore(), prompts: promptsFS}
+	app := &App{cfg: cfg, tts: tts, agent: agent, webFS: webAssets}
+
+	logConfig(cfg)
+
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: app.routes(),
+	}
+
+	log.Printf("Polyglot tutor listening on http://localhost:%s", cfg.Port)
+	if err := srv.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func resolvePrompts(dir string, embedded fs.FS) (fs.FS, error) {
+	var (
+		fsys   fs.FS
+		source string
+	)
+	if dir == "" {
+		sub, err := fs.Sub(embedded, "prompts")
+		if err != nil {
+			return nil, fmt.Errorf("embedded prompts: %w", err)
+		}
+		fsys = sub
+		source = "embedded prompts/"
+	} else {
+		fsys = os.DirFS(dir)
+		source = dir
+	}
+	return validatePrompts(fsys, source)
+}
+
+func validatePrompts(fsys fs.FS, source string) (fs.FS, error) {
+	for _, name := range requiredPromptFiles {
+		if _, err := fs.Stat(fsys, name); err != nil {
+			return nil, fmt.Errorf("prompt template %q missing from %s: %w", name, source, err)
+		}
+	}
+	return fsys, nil
+}
+
 func (a *App) routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/health", a.handleHealth)
+	mux.HandleFunc("/api/config", a.handleConfig)
 	mux.HandleFunc("/api/languages", a.handleLanguages)
 	mux.HandleFunc("/api/models", a.handleModels)
 	mux.HandleFunc("/api/session/start", a.handleStart)
@@ -46,6 +107,16 @@ func (a *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"ok":           true,
 		"defaultModel": a.cfg.LLMModel,
 		"ttsProvider":  a.cfg.TTSProvider,
+	})
+}
+
+func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sttSilenceMs": a.cfg.STTSilenceSeconds * 1000,
 	})
 }
 
@@ -79,7 +150,7 @@ func (a *App) providerAvailable(p string) bool {
 	case "anthropic":
 		return a.cfg.AnthropicKey != ""
 	default:
-		return true // ollama, mock
+		return true
 	}
 }
 

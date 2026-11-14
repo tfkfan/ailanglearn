@@ -6,9 +6,14 @@ import (
 	"strings"
 )
 
-// loadPrompt reads a prompt template from the embedded prompts directory.
+var requiredPromptFiles = []string{
+	"tutor_system.txt",
+	"topic_system.txt",
+	"topic_user.txt",
+}
+
 func loadPrompt(fsys fs.FS, name string) string {
-	data, err := fs.ReadFile(fsys, "prompts/"+name)
+	data, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		log.Printf("missing prompt template %s: %v", name, err)
 		return ""
@@ -16,7 +21,6 @@ func loadPrompt(fsys fs.FS, name string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// render substitutes {{Name}} placeholders in a prompt template.
 func render(tpl string, vars map[string]string) string {
 	for k, v := range vars {
 		tpl = strings.ReplaceAll(tpl, "{{"+k+"}}", v)

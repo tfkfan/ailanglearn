@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-// Session is one in-progress discussion.
 type Session struct {
 	ID       string    `json:"id"`
 	Language string    `json:"language"`
@@ -77,7 +76,6 @@ func (s *sessionStore) rememberTopic(lang, topic string) {
 	s.recent[lang] = list
 }
 
-// Agent orchestrates discussions using an LLM.
 type Agent struct {
 	llm     *LLM
 	store   *sessionStore
@@ -90,7 +88,6 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-// Start creates a new session and picks a fresh discussion topic.
 func (a *Agent) Start(lang, model string) (*Session, error) {
 	l, ok := langByCode(lang)
 	if !ok {
@@ -123,8 +120,6 @@ func (a *Agent) pickTopic(l Lang, model string) (topic, opening string) {
 	return a.seedTopic(l)
 }
 
-// llmTopic asks the model to propose a brand-new topic (avoiding recent ones)
-// plus a warm opening greeting in the target language.
 func (a *Agent) llmTopic(l Lang, model string) (string, string, bool) {
 	recent := a.store.recentTopics(l.Code)
 	sys := loadPrompt(a.prompts, "topic_system.txt")
@@ -153,7 +148,6 @@ func (a *Agent) llmTopic(l Lang, model string) (string, string, bool) {
 	return topic, greeting, true
 }
 
-// seedTopic picks a curated fallback topic, preferring one not used recently.
 func (a *Agent) seedTopic(l Lang) (string, string) {
 	seeds := topicSeeds[l.Code]
 	if len(seeds) == 0 {
@@ -169,7 +163,6 @@ func (a *Agent) seedTopic(l Lang) (string, string) {
 	return s.topic, s.greeting
 }
 
-// Send appends the learner's turn and returns the tutor's reply.
 func (a *Agent) Send(sessionID, text string) (reply string, demo bool, err error) {
 	sess, err := a.store.get(sessionID)
 	if err != nil {
@@ -205,7 +198,6 @@ func (a *Agent) Send(sessionID, text string) (reply string, demo bool, err error
 	return reply, demo, nil
 }
 
-// End closes the session and returns a short goodbye in the target language.
 func (a *Agent) End(sessionID string) (string, error) {
 	sess, err := a.store.get(sessionID)
 	if err != nil {

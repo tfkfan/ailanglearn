@@ -45,7 +45,6 @@ body {
   min-height: 100vh;
 }
 
-/* Top bar ------------------------------------------------------------- */
 .topbar {
   display: flex;
   align-items: center;
@@ -107,7 +106,6 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(237, 178, 76, 0); }
 }
 
-/* Setup --------------------------------------------------------------- */
 .setup { display: grid; gap: 14px; }
 
 .field-label {
@@ -166,7 +164,6 @@ body {
 }
 .select:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* Stage / orb ---------------------------------------------------------- */
 .stage {
   display: flex;
   flex-direction: column;
@@ -270,7 +267,6 @@ body {
   color: var(--ink);
 }
 
-/* Transcript ---------------------------------------------------------- */
 .transcript {
   display: flex;
   flex-direction: column;
@@ -337,7 +333,6 @@ body {
 .replay:hover { color: var(--ink); border-color: var(--line-strong); }
 .replay svg { width: 14px; height: 14px; }
 
-/* Mic dock ------------------------------------------------------------ */
 .micdock {
   display: flex;
   flex-direction: column;
@@ -395,7 +390,6 @@ body {
 }
 .sendbtn:hover { background: #f5c163; }
 
-/* Controls ------------------------------------------------------------ */
 .controls {
   display: flex;
   gap: 12px;
@@ -423,7 +417,6 @@ body {
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
 .btn-ghost:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
 
-/* A11y ----------------------------------------------------------------- */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {

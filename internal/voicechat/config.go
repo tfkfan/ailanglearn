@@ -3,9 +3,10 @@ package voicechat
 import (
 	"log"
 	"os"
+	"strconv"
+	"strings"
 )
 
-// Config holds all runtime configuration, populated from environment variables.
 type Config struct {
 	Port     string
 	LLMModel string
@@ -23,6 +24,9 @@ type Config struct {
 	TTSKey      string
 	TTSModel    string
 	TTSVoice    string
+
+	STTSilenceSeconds int
+	PromptsDir        string
 }
 
 func loadConfig() *Config {
@@ -41,6 +45,10 @@ func loadConfig() *Config {
 		TTSKey:        getenv("TTS_API_KEY", ""),
 		TTSModel:      getenv("TTS_MODEL", "tts-1"),
 		TTSVoice:      getenv("TTS_VOICE", "alloy"),
+
+		STTSilenceSeconds: getenvInt("STT_SILENCE_SECONDS", 5),
+
+		PromptsDir: getenv("PROMPTS_DIR", ""),
 	}
 }
 
@@ -51,13 +59,24 @@ func getenv(key, fallback string) string {
 	return fallback
 }
 
-// Lang describes one supported learning language.
+func getenvInt(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
+}
+
 type Lang struct {
-	Code   string `json:"code"`   // ISO code used internally
-	Name   string `json:"name"`   // English name (used in prompts)
-	Native string `json:"native"` // native name (used in the UI)
-	TTS    string `json:"tts"`    // language code for server TTS
-	STT    string `json:"stt"`    // BCP-47 code for browser speech recognition
+	Code   string `json:"code"`
+	Name   string `json:"name"`
+	Native string `json:"native"`
+	TTS    string `json:"tts"`
+	STT    string `json:"stt"`
 }
 
 var languages = []Lang{
@@ -75,7 +94,6 @@ func langByCode(code string) (Lang, bool) {
 	return Lang{}, false
 }
 
-// ModelInfo describes a selectable agent model.
 type ModelInfo struct {
 	ID        string `json:"id"`
 	Label     string `json:"label"`

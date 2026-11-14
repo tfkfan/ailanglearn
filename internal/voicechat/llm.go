@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// Message is a single chat turn.
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -27,7 +26,6 @@ type anthropicClient struct {
 	key  string
 }
 
-// LLM dispatches chat requests to the right provider for a given model id.
 type LLM struct {
 	http      *http.Client
 	deepseek  openAICompat
@@ -46,9 +44,6 @@ func newLLM(cfg *Config) *LLM {
 	}
 }
 
-// Chat sends the conversation to the provider for the given model. When the
-// provider has no credentials, it degrades to the offline demo and reports
-// demo=true so the caller can label the response accordingly.
 func (l *LLM) Chat(model, lang, system string, history []Message) (reply string, demo bool, err error) {
 	switch providerForModel(model) {
 	case "openai":
@@ -68,7 +63,7 @@ func (l *LLM) Chat(model, lang, system string, history []Message) (reply string,
 		return s, false, err
 	case "mock":
 		return mockReply(lang, history), true, nil
-	default: // deepseek
+	default:
 		if l.deepseek.key == "" {
 			return mockReply(lang, history), true, nil
 		}

@@ -53,6 +53,81 @@ All settings come from environment variables (see `.env.example`):
 | `OLLAMA_BASE` | `http://localhost:11434` | Local Ollama base URL |
 | `TTS_PROVIDER` | `google` | `google` (keyless) · `openai` · `mock` |
 | `TTS_API_BASE` / `TTS_API_KEY` / `TTS_MODEL` / `TTS_VOICE` | — | Used when `TTS_PROVIDER=openai` |
+| `STT_SILENCE_SECONDS` | `5` | Seconds of silence before your spoken turn is finalized |
+| `PROMPTS_DIR` | *(embedded)* | Directory with `tutor_system.txt`, `topic_system.txt`, `topic_user.txt` that overrides the embedded prompts |
+
+### Prompt templates
+
+The agent's entire behavior is driven by three small text files in `prompts/`:
+
+| File | Role |
+| --- | --- |
+| `tutor_system.txt` | The tutor's persona and the rules it follows on **every** reply. |
+| `topic_system.txt` | Instruction for the topic generator ("reply with JSON only"). |
+| `topic_user.txt` | The topic request itself — what kind of topic to pick. |
+
+Templates use `{{Placeholder}}` tokens: `{{Language}}`, `{{Topic}}`,
+`{{Opening}}`, and `{{RecentTopics}}` are substituted at runtime.
+
+You can edit these to make the agent whatever you need — it is not limited to
+casual conversation. Change the persona in `tutor_system.txt` (and optionally
+the topic request in `topic_user.txt`) and the same voice UI becomes an
+interviewer, a presentation audience, or anything else.
+
+To edit without rebuilding, point `PROMPTS_DIR` at a folder containing the same
+three files (validated at startup, so a missing file fails fast):
+
+```bash
+PROMPTS_DIR=/path/to/my-prompts ./ailanglearn
+```
+
+#### Example: job interview practice
+
+Replace the rules in `tutor_system.txt` with an interviewer persona:
+
+```text
+You are a friendly but professional interviewer conducting a job interview in {{Language}}.
+Ask one behavioral question at a time, follow up on the learner's answers, and keep every reply to 1-3 sentences in {{Language}}.
+Occasionally note, in {{Language}}, how the learner could phrase an answer more naturally.
+```
+
+Then make `topic_user.txt` request interview questions instead of casual topics:
+
+```text
+Target language: {{Language}}.
+Recently used topics to avoid: {{RecentTopics}}.
+
+Propose ONE fresh job-interview question suitable for speaking practice, plus a short opening line in {{Language}}.
+
+Reply with ONLY a JSON object in exactly this shape (no markdown fences, no extra text):
+{"topic":"<short topic phrase in English>","greeting":"<the greeting, entirely in {{Language}}>"}
+```
+
+#### Example: project / presentation practice
+
+Make the agent an audience that questions your talk:
+
+```text
+You are an attentive audience member listening to the learner rehearse a project presentation in {{Language}}.
+Ask clarifying questions about the project's goal, approach, and results — one at a time, in 1-3 sentences of {{Language}}.
+If the learner loses clarity, gently ask them to restate in {{Language}}.
+```
+
+#### Example: relaxed small talk (the default)
+
+Keep `tutor_system.txt` close to the shipped version: a warm tutor that stays
+on a casual topic, keeps replies short, and asks one follow-up question at a
+time.
+
+General tips:
+
+- Keep replies short — this is a **voice** app, so 1–3 sentences read best aloud.
+- Always tell it to stay in `{{Language}}` and to end with one question.
+- If you want feedback on mistakes, say so explicitly (e.g. "gently rephrase
+  major mistakes in your next sentence").
+- A new topic is picked every session, so describe the *category* of topic you
+  want (interview questions, presentation critiques, travel small talk, …) in
+  `topic_user.txt` rather than a single fixed subject.
 
 ### A note on `deepseek-v4-pro`
 
@@ -85,6 +160,8 @@ falls back to the offline demo tutor and the UI shows a small **demo** badge.
 - **Speech recognition** uses the browser's Web Speech API, which is available in
   Chrome and Edge (and needs an internet connection). The app shows a typed-input
   fallback everywhere, so it works even without a microphone.
+- Your spoken turn ends after `STT_SILENCE_SECONDS` (default 5) of silence rather
+  than the browser's short pause, so you can take your time between phrases.
 - If server TTS is unavailable, the app falls back to the browser's built-in
   speech synthesis.
 

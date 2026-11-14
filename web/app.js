@@ -36,6 +36,8 @@ const state = {
   audio: null,
   recognition: null,
   srSupported: false,
+  sttSilenceMs: 5000,
+  finalize: null,
 };
 
 const STT_FALLBACK = { en: 'en-US', es: 'es-ES', fr: 'fr-FR' };
@@ -51,7 +53,12 @@ async function api(path, body) {
   return data;
 }
 
-/* ---- Setup / rendering -------------------------------------------- */
+async function loadConfig() {
+  try {
+    const cfg = await api('/api/config');
+    if (cfg && cfg.sttSilenceMs > 0) state.sttSilenceMs = cfg.sttSilenceMs;
+  } catch {}
+}
 
 async function loadLanguages() {
   const { languages } = await api('/api/languages');
@@ -87,8 +94,6 @@ async function loadModels() {
   });
 }
 
-// A model is in demo mode when its provider has no credentials configured
-// (the server then falls back to the offline demo tutor).
 function modelDemoMode(id) {
   const m = (state.models || []).find((x) => x.id === id);
   return !m || !m.available;
@@ -108,8 +113,6 @@ function checkSpeechSupport() {
   state.srSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   els.micBtn.hidden = !state.srSupported;
 }
-
-/* ---- Orb / status / controls --------------------------------------- */
 
 function syncOrb() {
   let s = 'idle';
@@ -153,8 +156,6 @@ function updateDemoBadge() { els.demoPill.hidden = !state.demo; }
 function showTopic(topic) { els.topicText.textContent = topic; els.topicLine.hidden = false; }
 function hideTopic() { els.topicLine.hidden = true; }
 
-/* ---- Transcript ----------------------------------------------------- */
-
 function appendMessage(role, text, speakable) {
   if (els.transcript.querySelector('.empty')) els.transcript.innerHTML = '';
 
@@ -189,8 +190,6 @@ function renderEmptyState() {
   div.textContent = 'Your conversation will appear here.';
   els.transcript.appendChild(div);
 }
-
-/* ---- Session lifecycle --------------------------------------------- */
 
 async function startDiscussion() {
   if (state.active) return;
@@ -232,16 +231,15 @@ async function endDiscussion() {
   try {
     const r = await api('/api/session/end', { sessionId: sid });
     appendMessage('assistant', r.goodbye);
-  } catch {
-    /* session may already be gone — no-op */
-  }
+  } catch {}
   setStatus('Discussion ended. Start a new one whenever you like.');
 }
 
-/* ---- Voice input (speech recognition) ------------------------------ */
-
 function toggleMic() {
-  if (state.listening) { stopListening(); return; }
+  if (state.listening) {
+    if (state.finalize) { state.finalize(); } else { stopListening(); }
+    return;
+  }
   if (state.speaking) stopAudio();
   startListening();
 }
@@ -250,34 +248,65 @@ function startListening() {
   if (!state.active || !state.srSupported) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const rec = new SR();
-  rec.continuous = false;
+  rec.continuous = true;
   rec.interimResults = true;
   rec.lang = STT_FALLBACK[state.lang] || 'en-US';
 
-  rec.onresult = (e) => {
-    let interim = '';
-    let final = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) final += t;
-      else interim += t;
-    }
-    if (final) {
-      stopListening();
-      sendUserMessage(final.trim());
-    } else if (interim) {
-      setStatus('Heard: “' + interim + '”');
+  let finalText = '';
+  let lastInterim = '';
+  let silenceTimer = null;
+  let finished = false;
+
+  const clearSilence = () => {
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  };
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearSilence();
+    const text = (finalText || lastInterim).trim();
+    state.finalize = null;
+    stopListening();
+    if (text) {
+      sendUserMessage(text);
+    } else {
+      setStatus('Didn’t catch anything — tap the mic and try again.');
     }
   };
 
+  state.finalize = finish;
+
+  const resetSilence = () => {
+    clearSilence();
+    silenceTimer = setTimeout(finish, state.sttSilenceMs);
+  };
+
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    if (interim) lastInterim = interim;
+    resetSilence();
+    const preview = (finalText + ' ' + interim).trim();
+    setStatus(preview ? 'Heard: “' + preview + '”' : 'Listening — speak now.');
+  };
+
   rec.onend = () => {
-    if (state.listening) {
+    clearSilence();
+    if (!finished) {
+      finish();
+    } else {
       setListening(false);
-      if (!state.thinking && !state.speaking) setStatus('Tap the mic and speak.');
     }
   };
 
   rec.onerror = (e) => {
+    clearSilence();
+    state.finalize = null;
     setListening(false);
     handleRecError(e.error);
   };
@@ -294,9 +323,10 @@ function startListening() {
 
 function stopListening() {
   if (state.recognition) {
-    try { state.recognition.stop(); } catch { /* no-op */ }
+    try { state.recognition.stop(); } catch {}
     state.recognition = null;
   }
+  state.finalize = null;
   setListening(false);
 }
 
@@ -311,8 +341,6 @@ function handleRecError(code) {
   };
   setStatus(msgs[code] || 'Speech recognition error: ' + code);
 }
-
-/* ---- Send a turn ---------------------------------------------------- */
 
 async function sendUserMessage(text) {
   if (!state.active || !state.sessionId) return;
@@ -332,8 +360,6 @@ async function sendUserMessage(text) {
     setThinking(false);
   }
 }
-
-/* ---- Server-side voice (TTS) --------------------------------------- */
 
 async function speak(text) {
   stopAudio();
@@ -379,16 +405,14 @@ function browserSpeak(text) {
 
 function stopAudio() {
   if (state.audio) {
-    try { state.audio.pause(); } catch { /* no-op */ }
+    try { state.audio.pause(); } catch {}
     state.audio = null;
   }
   if ('speechSynthesis' in window) {
-    try { speechSynthesis.cancel(); } catch { /* no-op */ }
+    try { speechSynthesis.cancel(); } catch {}
   }
   setSpeaking(false);
 }
-
-/* ---- Wire-up -------------------------------------------------------- */
 
 function bind() {
   els.startBtn.addEventListener('click', startDiscussion);
@@ -408,7 +432,7 @@ async function init() {
   renderEmptyState();
   checkSpeechSupport();
   try {
-    await Promise.all([loadLanguages(), loadModels()]);
+    await Promise.all([loadLanguages(), loadModels(), loadConfig()]);
   } catch (err) {
     setStatus('Could not reach the server: ' + err.message);
   }

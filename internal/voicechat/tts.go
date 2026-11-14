@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// TTS converts text to speech audio on the server.
 type TTS struct {
 	provider string
 	http     *http.Client
@@ -32,7 +31,6 @@ func newTTS(cfg *Config) *TTS {
 	}
 }
 
-// Speak returns audio bytes and a MIME type.
 func (t *TTS) Speak(text, lang string) ([]byte, string, error) {
 	switch t.provider {
 	case "openai":
@@ -42,7 +40,7 @@ func (t *TTS) Speak(text, lang string) ([]byte, string, error) {
 		return t.openAI(text)
 	case "mock":
 		return nil, "", fmt.Errorf("server tts disabled (mock)")
-	default: // google
+	default:
 		data, err := t.google(text, lang)
 		if err != nil {
 			return nil, "", err
@@ -75,9 +73,6 @@ func (t *TTS) openAI(text string) ([]byte, string, error) {
 	return data, "audio/mpeg", nil
 }
 
-// google uses the keyless Google Translate TTS endpoint. Longer text is split
-// on sentence boundaries and the MP3 frames are concatenated, which browsers
-// and audio players decode fine.
 func (t *TTS) google(text, lang string) ([]byte, error) {
 	var buf bytes.Buffer
 	for _, chunk := range splitTTS(text, 180) {
@@ -124,7 +119,6 @@ func splitTTS(text string, max int) []string {
 			parts = append(parts, sent)
 			continue
 		}
-		// Hard-split an over-long sentence on word boundaries.
 		var cur strings.Builder
 		for _, w := range strings.Fields(sent) {
 			if cur.Len() > 0 && cur.Len()+len(w)+1 > max {

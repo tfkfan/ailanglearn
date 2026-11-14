@@ -1,8 +1,5 @@
 package voicechat
 
-// topicSeed is a curated fallback topic used when no LLM is configured or
-// available. Greetings are written in the target language so the app remains
-// fully usable in offline demo mode.
 type topicSeed struct {
 	topic    string
 	greeting string
