@@ -1,5 +1,7 @@
 # Polyglot — voice language tutor
 
+![Lobby](img.png)
+
 A small, self-contained web app for practicing spoken **English / Spanish / French**
 by having a voice conversation with an AI tutor. You talk into your microphone,
 the tutor replies — in the target language, out loud.
